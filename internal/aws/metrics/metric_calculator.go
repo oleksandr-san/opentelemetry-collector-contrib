@@ -5,15 +5,27 @@ package metrics // import "github.com/open-telemetry/opentelemetry-collector-con
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 )
 
-const (
-	cleanInterval = 5 * time.Minute
-)
+var cleanInterval = getCleanInterval()
+
+func getCleanInterval() time.Duration {
+	minutes := 15
+	if envMin := os.Getenv("CLEAN_INTERVAL_MINUTES"); envMin != "" {
+		if val, err := strconv.Atoi(envMin); err == nil {
+			minutes = val
+		}
+	}
+	fmt.Printf("Set clean interval to %d minutes\n", minutes)
+	return time.Duration(minutes) * time.Minute
+}
 
 // CalculateFunc defines how to process metric values by the calculator. It
 // passes previously received MetricValue, and the current raw value and timestamp
@@ -122,7 +134,7 @@ type MapWithExpiry struct {
 // NewMapWithExpiry automatically starts a sweeper to enforce the maps TTL. ShutDown() must be called to ensure that these
 // go routines are properly cleaned up ShutDown() must be called.
 func NewMapWithExpiry(ttl time.Duration) *MapWithExpiry {
-	m := &MapWithExpiry{lock: &sync.Mutex{}, ttl: ttl, entries: make(map[any]*MetricValue), doneChan: make(chan struct{}, 1000)}
+	m := &MapWithExpiry{lock: &sync.Mutex{}, ttl: ttl, entries: make(map[any]*MetricValue), doneChan: make(chan struct{})}
 	go m.sweep(m.CleanUp)
 	return m
 }
